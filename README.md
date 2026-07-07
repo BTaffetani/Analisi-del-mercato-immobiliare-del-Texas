@@ -28,4 +28,4 @@ Una volta compresa la struttura del dataset, è stata condotta un'analisi sulle 
 *   **Visualizzazione:** Ggplot
 
 ---
-*Progetto realizzato da **[Beatrice Taffetani]()** - [LinkedIn](https://www.linkedin.com/in/beatricetaffetani)*[cite: 1]
+*Progetto realizzato da **[Beatrice Taffetani](https://github.com/BTaffetani/beatrice-taffetani/blob/main/README.md)***
