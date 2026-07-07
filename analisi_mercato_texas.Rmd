@@ -1,0 +1,658 @@
+---
+---
+---
+
+# Analisi del mercato immobiliare del Texas
+
+Su richiesta di **Texas Realty Insights**, è stato analizzato un insieme di dati sulle vendite immobiliari in quattro città del Texas a partire da una tabella fornita dall'azienda stessa. I risultati di questa analisi saranno esposti in questo documento.
+
+Dopo aver importato i dati e fornito delle indicazioni sul contesto in cui sono stati raccolti, saranno analizzate nel dettaglio le variabili coinvolte e si individueranno le caratteristiche più rilevanti in termini di variabilità e asimmetria. Dall'analisi delle singole variabili ci sposteremo poi sull'analisi condizionata di più variabili contemporaneamente anche tramite il supporto di simulazioni e rappresentazioni grafiche.
+
+## Importazione dei dati e analisi delle variabili {#sez-1}
+
+Questa sezione sarà dedicata all'importazione e a un'analisi di carattere generale dei dati.
+
+I dati sono stati importati in un Dataframe R da un file CSV fornito dall'azienda committente.
+
+```{r}
+df <- read.csv("realestate_texas.csv", sep = ",")
+```
+
+Nella cella seguente saranno mostrate le dimensioni del dataset.
+
+```{r}
+dim(df)
+```
+
+La tabella è costituita da 240 osservazioni di cui sono state misurate 8 variabili. La cella seguente mostra le prime cinque righe del dataset.
+
+```{r}
+head(df,5)
+```
+
+La prima colonna, *city*, è una variabile qualitativa nominale e indica le città del Texas in cui sono state effettuate le rilevazioni. La cella seguente mostra i valori unici di questa colonna.
+
+```{r}
+unique(df$city)
+```
+
+La colonna *year* indica l'anno a cui fa riferimento l'osservazione. Si tratta di una variabile quantitativa discreta, ma in questa analisi sarà trattata come una variabile categorica. Di seguito si mostreranno i valori unici.
+
+```{r}
+unique(df$year)
+```
+
+In modo analogo tratteremo come variabile categorica la colonna *month*, anche se si tratta di una variabile quantitativa discreta di natura ciclica. Questa colonna indica infatti il mese di riferimento dell'osservazione in formato numerico. Anche di questa colonna si mostreranno i valori unici.
+
+```{r}
+unique(df$month)
+```
+
+Prima di procedere con l'analisi delle variabili, abbiamo ipotizzato che il numero di righe della tabella è dato dal prodotto tra il numero di valori unici delle colonne *city*, *year* e *month* e che, di conseguenza, i dati forniti rappresentino un riepilogo delle vendite sulla base di questi tre parametri. Questa ipotesi è stata verificata nella cella che segue
+
+```{r}
+n_city <- length(unique(df$city))
+n_year <- length(unique(df$year))
+n_month <- length(unique(df$month))
+
+n_city * n_year * n_month == nrow(df)
+```
+
+Tornando alle variabili in analisi, la colonna *sales* è una variabile quantitativa discreta che indica il numero di vendite registrate. La colonna *volume* indica il volume di vendite in milioni di dollari ed è pertanto una variabile quantitativa continua su scala di rapporti. La colonna *median_price*, invece, indica il prezzo mediano, ossia il prezzo al di sotto del quale sono stati venduti il 50% degli immobili, ed è anche essa una variabile quantitativa continua su scala di rapporti. Di queste tre colonne, che riguardano le vendite, sarà mostrato il range di valori nella cella seguente.
+
+```{r}
+library(knitr)
+
+r_sales <- range(df$sales)
+r_vol   <- range(df$volume) * 1000000
+r_price <- range(df$median_price)
+
+riepilogo_range <- data.frame(
+  Variabile = c("Vendite (unità)", "Volume Totale ($)", "Prezzo Mediano ($)"),
+  Minimo = c(r_sales[1], r_vol[1], r_price[1]),
+  Massimo = c(r_sales[2], r_vol[2], r_price[2])
+)
+
+kable(riepilogo_range, 
+      digits = 2, 
+      format.args = list(big.mark = ".", decimal.mark = ","),
+      caption = "Range delle principali variabili metriche")
+```
+
+I dati sugli annunci immobiliari sono invece indicati nelle colonne *listings* e *months_inventory*, che riportano rispettivamente il numero di annunci attivi come variabile quantitativa discreta e i mesi previsti per vendere tutti gli annunci correnti come variabile quantitativa continua su scala di rapporti. Anche in questo caso saranno mostrati i range di valori di queste colonne.
+
+```{r}
+r_listings <- range(df$listings)
+r_months_inventory <- range(df$months_inventory)
+
+riepilogo_range <- data.frame(
+  Variabile = c("Annunci attivi", "Mesi di inventario"),
+  Minimo = c(r_listings[1], r_months_inventory[1]),
+  Massimo = c(r_listings[2], r_months_inventory[2])
+)
+
+kable(riepilogo_range, 
+      digits = 2, 
+      format.args = list(big.mark = ".", decimal.mark = ","),
+      caption = "Range delle principali variabili metriche")
+```
+
+Riassumendo quanto esposto finora, possiamo inquadrare i dati come segue:
+
+- i dati monitorano il mercato immobiliare di Beaumont, Bryan-College Station, Tyler e Wichita Falls tra il 2010 e il 2014;
+- le vendite oscillano tra le 79 e le 423 unità, generando un volume d'affari complessivo tra gli 8,1 e i 83,6 milioni di dollari;
+- il prezzo mediano è compreso tra i 73000 e i 180000 dollari, evidenziando una significativa eterogeneità tra i mercati locali;
+- gli annunci attivi pubblicati sono compresi tra le 743 e le 3296 unità. Secondo le stime riportate, inoltre, occorrerebbero tra i tre e i quindici mesi per esaurire l'offerta disponibile.
+
+Il dettaglio riguardo ogni singola variabile sarà esplorato nella prossima sezione.
+
+## Indici di posizione, variabilità e forma {#sez-2}
+
+In questa sezione analizzeremo le variabili dal punto di vista della loro distribuzione.
+
+Partendo dalle variabili categoriche, la cella seguente mostra le frequenze assolute e relative della colonna *city*. Non trattandosi di una variabile ordinale, non sono state calcolate le frequenze cumulate.
+
+```{r}
+ni <- table(df$city)
+fi <- ni/dim(df)[1]
+
+cbind(ni,fi)
+```
+
+Come già anticipato nella precedente sezione, si osserva una distribuzione uniforme delle osservazioni tra le quattro città riportate nella tabella, a ulteriore conferma che i dati riguardano le vendite nell'arco di 60 mesi per ogni città.
+
+In modo analogo, le due celle seguenti mostrano le distribuzioni di frequenze nelle colonne *year* e *month* che, ricordiamo, sono trattate come variabili qualitative di tipo ordinale per gli scopi di questa analisi.
+
+```{r}
+ni <- table(df$year)
+fi <- ni/dim(df)[1]
+Ni <- cumsum(ni)
+Fi <- cumsum(fi)
+
+cbind(ni,fi,Ni,Fi)
+```
+
+```{r}
+ni <- table(df$month)
+fi <- ni/dim(df)[1]
+Ni <- cumsum(ni)
+Fi <- cumsum(fi)
+
+cbind(ni,fi,Ni,Fi)
+```
+
+Come anticipato in precedenza, la distribuzione dei dati è uniforme sia riguardo *year* che riguardo *month*. Osserviamo inoltre che metà delle osservazioni sono antecedenti al 2012 e riguardano il primo semestre di ogni anno.
+
+Per quanto riguarda le variabili numeriche, come anche parzialmente evidenziato nella sezione precedente, le colonne presentano dati continui. Anche per agevolare la lettura di questi dati, è stata definita la funzione *plot_distribution* che, a partire da un dataframe e dal nome di una sua colonna:
+
+1.  mostra in un grafico sia la distribuzione dei dati (in nero) che la normale avente la stessa media e la stessa deviazione standard (linea tratteggiata);
+
+2.  traccia come linee verticali la media (in verde), la mediana (in blu) e il range interquartile (in rosso);
+
+3.  stampa i valori calcolati nel punto precedente nella legenda.
+
+La funzione così definita è riportata nella cella seguente.
+
+```{r}
+library(ggplot2)
+
+plot_distribution <- function(df, var_name) {
+  x <- df[[var_name]]
+  
+  stats <- list(
+    mean = mean(x),
+    sd = sd(x),
+    q = quantile(x)
+  )
+  
+  ggplot() +
+    geom_density(aes(x=x), fill = "grey90", color = "black", linewidth = 0.8) +
+    stat_function(fun = dnorm, 
+                  args = list(mean = stats$mean, sd = stats$sd),
+                  linetype = "dashed", color = "black", linewidth = 0.7) +
+    geom_vline(aes(xintercept = stats$q[3], color = "Mediana"), linewidth = 1) +
+    geom_vline(aes(xintercept = stats$mean, color = "Media"), linewidth = 1) +
+    geom_vline(aes(xintercept = stats$q[2], color = "IQR (Q1-Q3)"), linetype = "dotted", linewidth = 0.8) +
+    geom_vline(aes(xintercept = stats$q[4], color = "IQR (Q1-Q3)"), linetype = "dotted", linewidth = 0.8) +
+    scale_color_manual(name = "", values = c(
+      "Mediana" = "blue", 
+      "Media" = "green3", 
+      "IQR (Q1-Q3)" = "red"
+    ),
+    labels = c(
+    "Mediana" = paste0("Mediana: ", format(stats$q[3], scientific = FALSE)),
+    "Media" = paste0("Media: ", format(stats$mean, scientific = FALSE)),
+    "IQR (Q1-Q3)" = paste0("IQR: ", format(stats$q[2]), " - ", format(stats$q[4]))
+  )) +
+    labs(
+      title = paste("Analisi distribuzione colonna", var_name),
+      x = var_name,
+      y = "Densità"
+    ) +
+    theme_minimal() +
+    theme(legend.position = "bottom")
+}
+```
+
+Applichiamo la funzione *plot_function* sulla colonna *sales* del dataset.
+
+```{r}
+plot_distribution(df, "sales")
+```
+
+Osserviamo una distribuzione delle vendite asimmetrica rispetto alla normale con la stessa media e la stessa deviazione standard. Più nello specifico si evidenzia una tendenza a un basso numero di vendite per il 75% dei dati e una tendenza, seppur minore, a un numero di vendite comprese tra le 275 e le 300 unità.
+
+La cella seguente mostra la distribuzione della colonna *volume*.
+
+```{r}
+plot_distribution(df, "volume")
+```
+
+Il grafico è simile nella forma alla distribuzione vista con il numero di vendite, ma la seconda "gobba" di dati (intorno ai 50 milioni) è meno evidente rispetto al grafico precedente.
+
+La cella seguente mostra la distribuzione della colonna *median_price*.
+
+```{r}
+plot_distribution(df, "median_price")
+```
+
+Il prezzo mediano è sì asimmetrico, ma in misura minore e soprattutto tende a mostrare come più frequenti i valori più alti, pur mostrando una tendenza minore intorno ai 100000 dollari.
+
+La cella seguente mostra la distribuzione della colonna *listings*.
+
+```{r}
+plot_distribution(df, "listings")
+```
+
+Decisamente asimmetrica rispetto alla distribuzione normale, la colonna *listings* concentra il 50% dei dati tra i 1000 e i 2000 annunci attivi. La distribuzione mostra inoltre due tendenze minori, una nel primo 25% dei dati e l'altra tra i 2750 e i 3000 annunci attivi.
+
+Infine, si mostra nella cella seguente la distribuzione della colonna *months_inventory*.
+
+```{r}
+plot_distribution(df, "months_inventory")
+```
+
+Come in *median_price*, i mesi di inventario tendono ad approssimare la distribuzione normale con la stessa media e la stessa deviazione standard, pur presentando una tendenza ai valori più bassi. Una seconda tendenza, di minore intensità, si osserva tra gli 11 e i 12 mesi.
+
+Sulla base di quanto osservato in questa sezione, possiamo dedurre quanto segue:
+
+- i dati sono uniformemente distribuiti tra quattro città del Texas nei sessanta mesi tra gennaio 2010 e dicembre 2014;
+- le variabili numeriche presentano diversi ordini di grandezza, motivo per cui il confronto diretto della loro variabilità sarà effettuato con indici relativi differenti. A questo confronto sarà dedicata la prossima sezione;
+- le variabili *sales*, *volume* e *listings* sono caratterizzate da un'asimmetria positiva, in cui la massa della distribuzione si è concentrata su valori più bassi tranne in picchi rappresentanti mesi particolarmente favorevoli per il mercato immobiliare;
+- dall'altra parte, la colonna *median_price* mostra una leggera asimmetria negativa, suggerendo una tenuta dei prezzi nonostante la variabilità dei volumi di vendita;
+- nel mezzo, la variabile *months_inventory* presenta una forma che meglio approssima la distribuzione normale, mostrando una capacità da parte del mercato di assorbire l'offerta e di stabilizzarsi intorno ai valori medi.
+
+## Variabilità e asimmetria {#sez-3}
+
+In questa sezione ci concentreremo sulla variabilità e sull'asimmetria delle variabili viste in precedenza.
+
+Come emerso nella sezione precedente, il diverso ordine di grandezza tra le variabili ci costringe a optare per indici come il coefficiente di variazione per misurare la variabilità dei dati, mentre per l'asimmetria sarà utilizzato l'indice di Fisher. Nella cella seguente è stata definita la funzione per il coefficiente di variazione ed è stata importata la libreria *moments* per il calcolo dell'asimmetria.
+
+```{r}
+cv <- function(x){
+  return (sd(x) / mean(x)) * 100
+}
+
+library(moments)
+```
+
+Dalle colonne quantitative otterremo una tabella riassuntiva *scores* che calcola i valori di media, deviazione standard, coefficiente di variazione e indice di Fisher. Questa tabella è calcolata e stampata nella cella seguente.
+
+```{r}
+columns <- c()
+cvs <- c()
+fishers <- c()
+
+for(i in 4:8){
+  columns <- append(columns, colnames(df[i]))
+  cvs <- append(cvs, cv(df[, i]))
+  fishers <- append(fishers, skewness(df[, i]))
+}
+
+scores <- data.frame(
+  cols <- columns,
+  cv <- cvs,
+  skew <- fishers
+)
+colnames(scores) <- c("Colonne","CV","Skewness")
+
+scores
+```
+
+Nelle due celle seguenti, la tabella *scores* è stata ordinata in base ai valori del coefficiente di variazione e di asimmetria.
+
+```{r}
+sort_by(scores,scores$CV)
+```
+
+```{r}
+sort_by(scores,scores$Skewness)
+```
+
+Notiamo che la colonna *volume* presenta sia la massima variabilità che la massima asimmetria. Visualizziamo nuovamente la sua distribuzione tramite la funzione *plot_distribution*.
+
+```{r}
+plot_distribution(df, "volume")
+```
+
+Unendo i risultati visivi ai primati in termini di variabilità e di asimmetria, questa variabile indica un mercato dominato da transazioni di valore contenuto con rari picci ad alto volume.
+
+La colonna *median_price*, invece, presenta sia la minima variabilità che la minima asimmetria.
+
+```{r}
+plot_distribution(df, "median_price")
+```
+
+Questa variabile diventa l'indicatore più stabile del mercato immobiliare. I prezzi non subiscono grandi oscillazioni come i volumi di vendita e la minima asimmetria ne conferma una distribuzione equilibrata tra le osservazioni rilevate.
+
+Il prezzo mediano sarà approfondito nella prossima sezione.
+
+## La distribuzione delle classi di prezzo mediano {#sez-4}
+
+In questa sezione approfondiremo la distribuzione del prezzo mediano nel dataset suddividendolo in fasce di prezzo.
+
+Allo scopo di interpretare più facilmente i dati, è stata aggiunta la colonna *median_price_K* che riscala la colonna *median_price* dividendone i valori per mille.
+
+```{r}
+df$median_price_K <- df$median_price/1000
+```
+
+Questa colonna è stata divisa in fasce da 10.000 dollari a partire da 70.000 dollari fino al massimo registrato di 180.000 dollari. Le fasce di prezzo sono state calcolate nella colonna *median_price_CL*.
+
+```{r}
+df$median_price_CL <- cut(df$median_price_K,breaks = seq(70,180,10))
+```
+
+Nella prima delle due celle che seguono sarà calcolata la distribuzione di frequenze delle classi di prezzo. La divisione in quartili del prezzo mediano, calcolata nella seconda cella, servirà come riferimento.
+
+```{r}
+ni <- table(df$median_price_CL)
+fi <- ni/dim(df)[1]
+Ni <- cumsum(ni)
+Fi <- cumsum(fi)
+
+cbind(ni,fi,Ni,Fi)
+```
+
+```{r}
+quantile(df$median_price_K)
+```
+
+Nella cella seguente calcoleremo la media ponderata della suddivisione in classi e il rapporto percentuale con la media effettiva dei valori.
+
+```{r}
+val_centrali <- seq(75,175,10)
+weight_mean <- weighted.mean(val_centrali,ni)
+
+weight_mean; round((weight_mean/mean(df$median_price_K))*100,3)
+```
+
+Il confronto con la media aritmetica effettiva mostra un rapporto del 99,81%, confermando che la scelta degli intervalli di classe non ha introdotto distorsioni significative nella rappresentazione del fenomeno.
+
+La cella che segue riepiloga in un grafico a barre la suddivisione nelle fasce di prezzo.
+
+```{r}
+df_prezzi <- data.frame(Classi = levels(df$median_price_CL), Frequenze = ni)
+
+ggplot(df_prezzi, aes(x = Classi, y = Frequenze.Freq)) +
+  geom_col(color = "white", show.legend = FALSE) +
+  coord_cartesian(ylim = c(0, 50)) +
+  labs(
+    title = "Distribuzione del prezzo mediano",
+    x = "Classi di Prezzo (in K)",
+    y = "Frequenza Assoluta (ni)"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1),
+    panel.grid.major.x = element_blank()
+  )
+```
+
+Infine, nella cella che segue calcoleremo l'indice di Gini della suddivisione in classi, che misura la tendenza del prezzo mediano a distribuirsi equamente tra le fasce indicate.
+
+```{r}
+G <- 1 - sum(fi^2)
+J <- length(fi)
+gini <- G/((J-1)/J)
+
+gini
+```
+
+Da questi risultati osserviamo quanto segue:
+
+- la media ponderata della suddivisione in classi approssima a oltre il 99% la media effettiva dei valori ottenuti, il che implica una trascurabile perdita di informazione;
+- la classe modale è rappresentata dalla fascia di prezzo tra i 130.000 e i 140.000 dollari, come anche evidenziabile nella distribuzione dei valori effettivi di prezzo mediano. Questo conferma la solidità della suddivisione in classi applicata a questa variabile;
+- i dati si distribuiscono in modo molto eterogeneo tra le fasce di prezzo indicate. Questo significa che, pur mostrando la minima asimmetria rispetto alla distribuzione normale, rimane la tendenza a distribuirsi uniformemente tra tutte le fasce di prezzo, mostrando una varietà nell'offerta del mercato immobiliare.
+
+## Simulazioni di probabilità sulle città, sul mese e sull'anno {#sez-5}
+
+In questa sezione ci occuperemo di effettuare delle simulazioni di probabilità sulle colonne *city*, *month* e *year*. In particolare, esamineremo tre eventi:
+
+- L'estrazione di un record riferito alla città di Beaumont indipendentemente dal mese e dall'anno di riferimento;
+- L'estrazione di un record risalente al mese di luglio, indipendentemente dalla città e dall'anno;
+- L'estrazione di un record risalente a dicembre 2012, indipendentemente dalla città.
+
+Ricordiamo brevemente che le tre colonne presentano ciascuna una distribuzione uniforme dei dati all'interno del dataset, perciò i risultati che si otterranno dalle simulazioni non cambieranno al variare dei parametri negli eventi da esaminare. Se poi noi utilizziamo un approccio classico alla probabilità, essa coinciderà con le frequenze relative dei valori in esame.
+
+Nella cella seguente, calcoliamo quindi le probabilità degli eventi sopra citati.
+
+```{r}
+p_beaumont <- sum(df$city == "Beaumont")/dim(df)[1]
+p_july <- sum(df$month == 7)/dim(df)[1]
+p_dec_12 <- sum(df$month == 12 & df$year == 2012)/dim(df)[1]
+
+print(paste("Probability Beaumont:",p_beaumont))
+print(paste("Probability July:",p_july))
+print(paste("Probability December 2012:",p_dec_12))
+```
+
+Verifichiamo ora con un approccio frequentista questi risultati. L'idea è di simulare l'estrazione di un campione di questi dati e calcolare la frequenza relativa delle estrazioni in cui si verificano gli eventi descritti.
+
+Per fare questo, definiamo la funzione *simulate_extraction* che, dato il numero N di simulazioni, estrae casualmente N record dal dataset.
+
+```{r}
+simulate_extraction <- function(N){
+  rows <- sample(1:dim(df)[1], N, replace = TRUE)
+  return(df[rows, ])
+}
+```
+
+Nella cella seguente costruiamo la tabella *simulations* che effettua fino a 100.000 simulazioni e calcola le frequenze relative degli eventi in esame (per semplicità, per un numero di simulazioni nullo, le frequenze saranno nulle a loro volta). All'interno della stessa cella, *simulations* sarà convertito in un dataframe per facilitare la visualizzazione della tabella.
+
+```{r}
+n_steps <- seq(0, 100000, 1000)
+results_matrix <- matrix(NA, nrow = length(n_steps), ncol = 4)
+colnames(results_matrix) <- c("N", "Prob_Beaumont", "Prob_July", "Prob_Dec2012")
+
+for(i in seq_along(n_steps)){
+  N <- n_steps[i]
+  
+  if(N == 0){
+    results_matrix[i, ] <- c(0, 0, 0, 0)
+  } else {
+    df_sim <- simulate_extraction(N)
+    
+    results_matrix[i, ] <- c(
+      N,
+      mean(df_sim$city == "Beaumont"),
+      mean(df_sim$month == 7),
+      mean(df_sim$month == 12 & df_sim$year == 2012)
+    )
+  }
+}
+
+simulations_df <- as.data.frame(results_matrix)
+```
+
+Le tre celle seguenti riepilogano graficamente i risultati ottenuti. Il grafico a linee rappresenta le frequenze relative dei successi per il numero di simulazioni, mentre la linea tratteggiata rossa rappresenta la probabilità calcolata con l'approccio classico.
+
+```{r}
+library(ggplot2)
+
+ggplot(simulations_df, aes(x = N, y = Prob_Beaumont)) +
+  geom_line(color = "steelblue", size = 0.8) +
+  geom_hline(aes(yintercept = p_beaumont, color = "Prob. Teorica"), 
+             linetype = "dashed", size = 1) +
+  scale_color_manual(name = "", values = c("Prob. Teorica" = "red")) +
+  labs(
+    title = "Verifica Empirica",
+    x = "Numero di simulazioni (N)",
+    y = "Frequenza relativa"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+```
+
+```{r}
+ggplot(simulations_df, aes(x = N, y = Prob_July)) +
+  geom_line(color = "steelblue", size = 0.8) +
+  geom_hline(aes(yintercept = p_july, color = "Prob. Teorica"), 
+             linetype = "dashed", size = 1) +
+  scale_color_manual(name = "", values = c("Prob. Teorica" = "red")) +
+  labs(
+    title = "Verifica Empirica",
+    x = "Numero di simulazioni (N)",
+    y = "Frequenza relativa"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+```
+
+```{r}
+ggplot(simulations_df, aes(x = N, y = Prob_Dec2012)) +
+  geom_line(color = "steelblue", size = 0.8) +
+  geom_hline(aes(yintercept = p_dec_12, color = "Prob. Teorica"), 
+             linetype = "dashed", size = 1) +
+  scale_color_manual(name = "", values = c("Prob. Teorica" = "red")) +
+  labs(
+    title = "Verifica Empirica",
+    x = "Numero di simulazioni (N)",
+    y = "Frequenza relativa"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+```
+
+Osserviamo che le frequenze relative dei tre eventi tenderanno alla probabilità calcolata all'aumentare del numero di prove. La fluttuazione di questi valori intorno alla probabilità è dovuta perlopiù alla casualità con cui sono stati estratti i campioni dalla funzione *extract_simulations*.
+
+## Il calcolo delle nuove variabili {#sez-6}
+
+Questa sezione è dedicata alla creazione di nuove variabili a partire dalle colonne del dataset. Più nello specifico, saranno calcolati i seguenti indicatori:
+
+- Il prezzo medio di ciascun immobile venduto nella città di riferimento nel mese e nell'anno specificati;
+- Il tempo di inventario medio, ossia il tempo medio in ore che occorre per evadere un annuncio attivo.
+
+Entrambi gli indicatori sono stati calcolati nella cella seguente. Allo scopo di facilitare la lettura e l'interpretazione dei dati, la colonna *volume* è stata moltiplicata per 1000000 (ricordiamo che il volume di vendite è espresso in milioni di dollari), mentre la colonna *months_inventory* è stata moltiplicata per 30 giorni e per 24 ore.
+
+```{r}
+df$mean_price <- (df$volume * 1000000) / df$sales
+df$mean_inventory <- (df$months_inventory * 30 * 24) / df$listings
+```
+
+La cella seguente mostra le prime cinque righe delle colonne *city*, *month* e *year* insieme alle due colonne appena calcolate.
+
+```{r}
+head(df[c("city","month","year","mean_price","mean_inventory")],5)
+```
+
+Le due celle seguenti mostrano tramite la funzione *plot_distribution* le distribuzioni delle due nuove variabili.
+
+```{r}
+plot_distribution(df, "mean_price")
+```
+
+```{r}
+plot_distribution(df, "mean_inventory")
+```
+
+Da questi risultati osserviamo quanto segue:
+
+- La distribuzione di *mean_price* ricalca fedelmente quella di *median_price* con una simmetria quasi perfetta e una bassa variabilità. Questo consolida l'ipotesi di un mercato immobiliare caratterizzato da un valore patrimoniale solido e privo di shock speculativi nel quinquennio;
+- La variabile *mean_inventory* rivela una distribuzione bimodale, con una prima componente marcata che riflette periodi di assorbimento rapido dell'offerta e una seconda che evidenzia fasi di contrazione della domanda. Questa eterogeneità suggerisce che, nonostante la stabilità dei prezzi, l'efficacia delle vendite abbia risentito di una marcata ciclicità stagionale o economica.
+
+## Analisi condizionata {#sez-7}
+
+Questa sezione approfondirà il numero e il volume di vendita in base al tempo e alla città di riferimento.
+
+La cella seguente mostrerà il numero di vendite nel tempo in base alla città di riferimento.
+
+```{r}
+df$date <- as.Date(paste(df$year, df$month, "01", sep = "-"))
+
+ggplot(df, aes(x = date, y = sales, color = city)) +
+  geom_line(size = 0.8) +
+  scale_color_brewer(palette = "Set1") +
+  scale_x_date(date_breaks = "6 months", date_labels = "%m/%Y") +
+  labs(
+    title = "Andamento Storico delle Vendite per Città",
+    x = "Mese/Anno",
+    y = "Numero di Vendite",
+    color = "Città"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "bottom"
+  )
+```
+
+Analogamente, la cella seguente mostra lo stesso tipo di grafico ma per i volumi di vendita.
+
+```{r}
+ggplot(df, aes(x = date, y = volume, color = city)) +
+  geom_line(size = 0.8) +
+  scale_color_brewer(palette = "Set1") +
+  scale_x_date(date_breaks = "6 months", date_labels = "%m/%Y") +
+  labs(
+    title = "Andamento Storico del Volume di Vendite per Città",
+    x = "Mese/Anno",
+    y = "Volume di vendite",
+    color = "Città"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "bottom"
+  )
+```
+
+Il confronto visivo tra le due variabili evidenzia una similarità nella forma, che ci permette di trarre le seguenti conclusioni:
+
+- Entrambi gli indicatori mostrano una spiccata stagionalità annuale, con un trend espansivo nel primo semestre seguito da una fase di contrazione nel secondo semestre. Questo pattern suggerisce che il mercato immobiliare texano risponda a dinamiche temporali ricorrenti e prevedibili.
+- La città di Tyler si conferma il primo mercato in termini di volumi e transazioni, sebbene le serie storiche evidenzino episodi di avvicendamento con Bryan-College Station (in particolare nei secondi trimestri del 2013 e 2014). Tale fenomeno indica una competizione serrata tra i due poli urbani nei periodi di massima attività.
+- Le minori vendite sia come numero che come volume si sono registrate nella città di Wichita Falls, che tende ad assumere un comportamento meno spiccato rispetto alle altre tre città osservate. Questo ci porta a ipotizzare un mercato di tipo più conservativo rispetto ai due evidenziati nel punto precedente.
+
+## Ulteriori analisi condizionate con ggplot {#sez-8}
+
+In questa sezione effettueremo ulteriori analisi condizionate sul dataset sfruttando le potenzialità di ggplot.
+
+Riprendendo dalla conclusione della precedente sezione, il grafico a barre nella cella seguente riepiloga le vendite in base alla città di riferimento.
+
+```{r}
+library(ggplot2)
+library(dplyr)
+
+df_sales <- df %>% group_by(city) %>% summarise(total_sales = sum(sales), .groups = "drop")
+
+ggplot(df_sales, aes(x = city, y = total_sales, fill = city)) +
+  geom_col(show.legend = FALSE) + 
+  scale_fill_brewer(palette = "Set2") +
+  labs(
+    title = "Volume Complessivo delle Vendite per Città",
+    x = "Città",
+    y = "Numero Totale di Vendite"
+  ) +
+  theme_minimal()
+```
+
+Sempre condizionati dalla città di riferimento, i boxplot della cella seguente mostrano la distribuzione dei prezzi mediani.
+
+```{r}
+ggplot(df, aes(x = city, y = median_price_K, fill = city)) +
+  geom_boxplot(alpha = 0.7, outlier.colour = "red", outlier.shape = 16) +
+  scale_fill_brewer(palette = "Set1") +
+  labs(
+    title = "Distribuzione del Prezzo Mediano per Città",
+    x = "Città",
+    y = "Prezzo mediano (in migliaia di $)"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+
+Infine, nella cella seguente i dati di vendita sono stati raggruppati in base all'anno e al mese di riferimento per poi essere mostrati in un grafico a linee. La linea rossa tratteggiata mostra il trend seguito da questi dati.
+
+```{r}
+df_time <- df %>% group_by(date) %>% summarise(total_sales = sum(sales), .groups = "drop")
+
+ggplot(df_time, aes(x = date, y = total_sales)) +
+  geom_area(fill = "steelblue", alpha = 0.2) +
+  geom_line(color = "steelblue4", size = 1) +
+  geom_smooth(aes(x = date, y = total_sales), method = "lm", color = "red", se = FALSE, linetype = "dashed") +
+  scale_x_date(date_breaks = "4 months", date_labels = "%m/%y") +
+  labs(
+    title = "Evoluzione Storica delle Vendite Totali",
+    x = "Mese e Anno",
+    y = "Volume Transazioni"
+  ) +
+  theme_light() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+Da questi grafici osserviamo quanto segue:
+
+- Continua dalla sezione precedente la diversità tra i mercati analizzati, con Wichita Falls che si conferma come un mercato caratterizzato dai volumi più contenuti e dalle fasce di prezzo più accessibili. Al contrario, Bryan-College Station si posiziona nel segmento più elevato, mantenendo i prezzi mediani più alti nonostante volumi inferiori rispetto a Tyler;
+- L'andamento delle vendite conferma il trend ciclico con una fase espansiva seguita da una contrazione. Inoltre, coesiste un secondo trend tendenzialmente lineare nell'arco dei 60 mesi, che suggerisce un rafforzamento strutturale del mercato al di là delle oscillazioni cicliche.
+
+## Conclusioni
+
+L'ultima sezione del progetto è dedicata alle conclusioni che si sono potute trarre dai risultati delle precedenti sezioni.
+
+Ricordiamo che il dataset fornito da **Texas Realty Insights** mostra i dati di vendita degli immobili nelle città di Beaumont, Bryan-College Station, Tyler e Wichita Falls nel quinquennio tra il 2010 e il 2014. [Dalle simulazioni di calcolo delle probabilità](#sez-5) sappiamo che la città, il mese e l'anno di riferimento dei record sono distribuiti nel dataset in modo uniforme.
+
+[Dall'analisi delle variabili](#sez-1) e [dagli indici di posizione, variabilità e forma](#sez-2) è stata osservata una tendenza ai valori più bassi di vendite sia dal punto di vista del numero che da quello del volume. Ciò ci ha portato a dedurre un comportamento cauto nell'investimento immobiliare, mentre [la minima variabilità e asimmetria](#sez-3) registrate dal prezzo mediano hanno evidenziato una stabilità dei prezzi degli immobili, anche se [la suddivisione in fasce di prezzo](#sez-4) ci ha portato a concludere la tendenza a non concentrarsi su un unico valore, ma piuttosto a distribuirsi in modo eterogeneo tra le fascie di prezzo.
+
+Dal punto di vista degli annunci, l'esplorazione delle variabili ha contrapposto la stabilità dei mesi di inventario con la variabilità e l'asimmetria del numero di annunci attivi. Queste caratteristiche sono emerse anche [nel calcolo del tempo medio di inventario](#sez-6), in cui si sono evidenziate sia la tendenza principale a evadere un annuncio in tempi molto brevi che una tendenza, seppur minore, ad avere tempi di vendita più lunghi.
+
+[Analizzando le vendite dal punto di vista delle città di riferimento](#sez-7), è emerso un comportamento ciclico del mercato immobiliare [confermato anche dall'analisi delle vendite nel tempo](#sez-8), dove è emersa inoltre una crescita lineare delle vendite. Dall'ultima sezione, poi, è emerso che il maggiore numero di vendite si è registrato nella città di Tyler, mentre la fascia di prezzo mediano più elevata si è registrata nella città di Bryan-College Station.
