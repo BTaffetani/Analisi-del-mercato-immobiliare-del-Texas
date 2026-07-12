@@ -14,8 +14,8 @@ Il dataset utilizzato contiene i dati storici di quattro filiali di un'agenzia i
 ## Struttura del Repository
 Il progetto è organizzato come segue:
 
-*   `data/`: Contiene il file CSV su cui è basato il progetto.
-*   `notebooks/`: Contiene il file Rmd con le fasi del progetto e le analisi effettuate.
+*   `data/`: Il file CSV con i dati al centro del progetto.
+*   `notebooks/`: Il file Rmd in cui sono descritte le fasi del progetto e le analisi effettuate.
 *   `README.md`: Questa guida descrittiva.
 
 ## Metodologia e Fasi del Lavoro
